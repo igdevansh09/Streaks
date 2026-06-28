@@ -1,63 +1,79 @@
 import * as Notifications from 'expo-notifications';
-import { Habit } from '../habits/types';
+import { Platform } from 'react-native';
+import { Habit, NotificationData } from '../habits/types';
+import { CHANNEL_ID } from './setup';
 
 export async function scheduleHabitReminders(
-  name: string,
-  emoji: string,
-  frequency: Habit['frequency']
+  habit: Pick<Habit, 'id' | 'name' | 'emoji' | 'frequency'>,
 ): Promise<string[]> {
-  const title = `${emoji} Time for your habit!`;
-  const body = `Don't break the chain! Remember to complete: ${name}`;
-  const notificationIds: string[] = [];
+  try {
+    const { frequency } = habit;
+    const ids: string[] = [];
 
-  if (frequency.kind === 'daily') {
-    const id = await Notifications.scheduleNotificationAsync({
-      content: {
-        title,
-        body,
-        sound: true,
-        data: { screen: '/habit', habitName: name },
-      },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.DAILY,
-        hour: frequency.hour,
-        minute: frequency.minute,
-      },
-    });
-    notificationIds.push(id);
-  } else if (frequency.kind === 'weekly') {
-    for (const day of frequency.weekdays) {
-      const expoWeekday = day === 0 ? 1 : day + 1; 
-      
+    const content: Notifications.NotificationContentInput = {
+      title: `Time for ${habit.emoji} ${habit.name}`,
+      body: 'Tap to log it.',
+      sound: 'default',
+      data: {
+        screen: '/habit',
+        habitId: habit.id,
+      } satisfies NotificationData,
+      ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
+    };
+
+    if (frequency.kind === 'daily') {
       const id = await Notifications.scheduleNotificationAsync({
-        content: {
-          title,
-          body,
-          sound: true,
-          data: { screen: '/habit', habitName: name },
-        },
+        content,
         trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
-          weekday: expoWeekday,
+          type: Notifications.SchedulableTriggerInputTypes.DAILY,
           hour: frequency.hour,
           minute: frequency.minute,
         },
       });
-      notificationIds.push(id);
+      ids.push(id);
+    } else {
+      for (const weekday of frequency.weekdays) {
+        const expoWeekday = weekday + 1;
+        const id = await Notifications.scheduleNotificationAsync({
+          content,
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+            weekday: expoWeekday,
+            hour: frequency.hour,
+            minute: frequency.minute,
+          },
+        });
+        ids.push(id);
+      }
     }
-  }
 
-  return notificationIds;
+    return ids;
+  } catch (e) {
+    console.warn('[schedule] scheduleHabitReminders failed:', e);
+    return [];
+  }
 }
 
-export async function cancelSpecificNotifications(ids: string[]): Promise<void> {
-  await Promise.all(
-    ids.map(async (id) => {
-      try {
-        await Notifications.cancelScheduledNotificationAsync(id);
-      } catch (error) {
-        console.warn(`Failed to cancel notification ${id}:`, error);
-      }
-    })
+export async function cancelHabitReminders(notificationIds: string[]): Promise<void> {
+  await Promise.allSettled(
+    notificationIds.map((id) => Notifications.cancelScheduledNotificationAsync(id)),
   );
+}
+
+export async function rescheduleHabitReminders(
+  oldNotificationIds: string[],
+  habit: Pick<Habit, 'id' | 'name' | 'emoji' | 'frequency'>,
+): Promise<string[]> {
+  await cancelHabitReminders(oldNotificationIds);
+  return scheduleHabitReminders(habit);
+}
+
+
+export async function getAllScheduledCount(): Promise<number> {
+  const all = await Notifications.getAllScheduledNotificationsAsync();
+  return all.length;
+}
+
+export async function cancelAllScheduled(): Promise<void> {
+  await Notifications.cancelAllScheduledNotificationsAsync();
 }

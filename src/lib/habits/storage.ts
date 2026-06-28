@@ -1,88 +1,185 @@
-import { getDbConnection } from '../db/sqlite';
-import { Habit, Weekday, DateString } from './types';
-import { scheduleHabitReminders, cancelSpecificNotifications } from '../notifications/schedule';
+import * as SQLite from 'expo-sqlite';
+import { Habit, Frequency } from './types';
 
-export async function getAllHabitsFromDB(): Promise<Habit[]> {
-  const db = await getDbConnection();
-  const habitsRows: any[] = await db.getAllAsync('SELECT * FROM habits');
-  const habits: Habit[] = [];
+const db = SQLite.openDatabaseSync('habitflow.db');
 
-  for (const row of habitsRows) {
-    const weekdaysRows: any[] = await db.getAllAsync('SELECT weekday FROM habit_weekdays WHERE habit_id = ?', [row.id]);
-    const notificationsRows: any[] = await db.getAllAsync('SELECT notification_id FROM habit_notifications WHERE habit_id = ?', [row.id]);
+db.execSync(`
+  CREATE TABLE IF NOT EXISTS habits (
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL,
+    emoji TEXT NOT NULL,
+    frequency TEXT NOT NULL,
+    notificationIds TEXT NOT NULL,
+    streak INTEGER NOT NULL,
+    lastCompletedISO TEXT,
+    createdAt TEXT NOT NULL
+  );
+`);
 
-    habits.push({
-      id: row.id,
-      name: row.name,
-      emoji: row.emoji,
-      streak: row.streak,
-      lastCompletedDate: row.last_completed_date,
-      notificationIds: notificationsRows.map((r) => r.notification_id),
-      frequency: row.frequency_kind === 'daily' 
-        ? { kind: 'daily', hour: row.reminder_hour, minute: row.reminder_minute }
-        : { kind: 'weekly', weekdays: weekdaysRows.map((r) => r.weekday as Weekday), hour: row.reminder_hour, minute: row.reminder_minute }
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function yesterdayISO(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function generateId(): string {
+  return `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function rowToHabit(row: any): Habit {
+  return {
+    id: row.id,
+    name: row.name,
+    emoji: row.emoji,
+    frequency: JSON.parse(row.frequency),
+    notificationIds: JSON.parse(row.notificationIds),
+    streak: row.streak,
+    lastCompletedISO: row.lastCompletedISO,
+    createdAt: row.createdAt,
+  };
+}
+
+export async function loadHabits(): Promise<Habit[]> {
+  try {
+    const rows = await db.getAllAsync('SELECT * FROM habits');
+    return rows.map(rowToHabit);
+  } catch {
+    return [];
+  }
+}
+
+export async function saveHabits(habits: Habit[]): Promise<void> {
+  try {
+    await db.withTransactionAsync(async () => {
+      await db.runAsync('DELETE FROM habits');
+      for (const habit of habits) {
+        await db.runAsync(
+          `INSERT INTO habits (id, name, emoji, frequency, notificationIds, streak, lastCompletedISO, createdAt)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            habit.id,
+            habit.name,
+            habit.emoji,
+            JSON.stringify(habit.frequency),
+            JSON.stringify(habit.notificationIds),
+            habit.streak,
+            habit.lastCompletedISO,
+            habit.createdAt
+          ]
+        );
+      }
     });
+  } catch (e) {
+    console.warn('[storage] saveHabits failed:', e);
   }
-  return habits; 
 }
 
-export async function saveNewHabitToDB(habit: Omit<Habit, 'notificationIds'>): Promise<Habit> {
-  const db = await getDbConnection();
-  const generatedIds = await scheduleHabitReminders(habit.name, habit.emoji, habit.frequency);
+export async function createHabit(
+  name: string,
+  emoji: string,
+  frequency: Frequency,
+  notificationIds: string[] = [],
+): Promise<Habit> {
+  const habit: Habit = {
+    id: generateId(),
+    name,
+    emoji,
+    frequency,
+    notificationIds,
+    streak: 0,
+    lastCompletedISO: null,
+    createdAt: new Date().toISOString(),
+  };
 
   await db.runAsync(
-    `INSERT INTO habits (id, name, emoji, frequency_kind, reminder_hour, reminder_minute, streak, last_completed_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [habit.id, habit.name, habit.emoji, habit.frequency.kind, habit.frequency.hour, habit.frequency.minute, habit.streak, habit.lastCompletedDate]
+    `INSERT INTO habits (id, name, emoji, frequency, notificationIds, streak, lastCompletedISO, createdAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      habit.id,
+      habit.name,
+      habit.emoji,
+      JSON.stringify(habit.frequency),
+      JSON.stringify(habit.notificationIds),
+      habit.streak,
+      habit.lastCompletedISO,
+      habit.createdAt
+    ]
   );
 
-  if (habit.frequency.kind === 'weekly') {
-    for (const day of habit.frequency.weekdays) {
-      await db.runAsync('INSERT INTO habit_weekdays (habit_id, weekday) VALUES (?, ?)', [habit.id, day]);
-    }
-  }
-
-  for (const notifId of generatedIds) {
-    await db.runAsync('INSERT INTO habit_notifications (notification_id, habit_id) VALUES (?, ?)', [notifId, habit.id]);
-  }
-
-  return { ...habit, notificationIds: generatedIds }; 
+  return habit;
 }
 
-export async function updateHabitRemindersInDB(habitId: string, updatedHabit: Omit<Habit, 'id' | 'notificationIds' | 'streak' | 'lastCompletedDate'>): Promise<string[]> {  const db = await getDbConnection();
-  const oldNotifs: any[] = await db.getAllAsync('SELECT notification_id FROM habit_notifications WHERE habit_id = ?', [habitId]);
-  
-  await cancelSpecificNotifications(oldNotifs.map(r => r.notification_id));
-  const newIds = await scheduleHabitReminders(updatedHabit.name, updatedHabit.emoji, updatedHabit.frequency);
-
+export async function updateHabit(updated: Habit): Promise<void> {
   await db.runAsync(
-    `UPDATE habits SET name = ?, emoji = ?, frequency_kind = ?, reminder_hour = ?, reminder_minute = ? WHERE id = ?`,
-    [updatedHabit.name, updatedHabit.emoji, updatedHabit.frequency.kind, updatedHabit.frequency.hour, updatedHabit.frequency.minute, habitId]
+    `UPDATE habits SET 
+     name = ?, emoji = ?, frequency = ?, notificationIds = ?, streak = ?, lastCompletedISO = ?, createdAt = ?
+     WHERE id = ?`,
+    [
+      updated.name,
+      updated.emoji,
+      JSON.stringify(updated.frequency),
+      JSON.stringify(updated.notificationIds),
+      updated.streak,
+      updated.lastCompletedISO,
+      updated.createdAt,
+      updated.id
+    ]
   );
-
-  await db.runAsync('DELETE FROM habit_weekdays WHERE habit_id = ?', [habitId]);
-  if (updatedHabit.frequency.kind === 'weekly') {
-    for (const day of updatedHabit.frequency.weekdays) {
-      await db.runAsync('INSERT INTO habit_weekdays (habit_id, weekday) VALUES (?, ?)', [habitId, day]);
-    }
-  }
-
-  await db.runAsync('DELETE FROM habit_notifications WHERE habit_id = ?', [habitId]);
-  for (const notifId of newIds) {
-    await db.runAsync('INSERT INTO habit_notifications (notification_id, habit_id) VALUES (?, ?)', [notifId, habitId]);
-  }
-  return newIds; 
 }
 
-export async function deleteHabitFromDB(habitId: string): Promise<void> {
-  const db = await getDbConnection();
-  const oldNotifs: any[] = await db.getAllAsync('SELECT notification_id FROM habit_notifications WHERE habit_id = ?', [habitId]);
-  await cancelSpecificNotifications(oldNotifs.map(r => r.notification_id));
-  await db.runAsync('DELETE FROM habits WHERE id = ?', [habitId]);
-  return; 
+export async function deleteHabit(id: string): Promise<void> {
+  await db.runAsync('DELETE FROM habits WHERE id = ?', [id]);
 }
 
-export async function updateStreakInDB(habitId: string, streak: number, lastCompletedDate: DateString | null): Promise<void> {
-  const db = await getDbConnection();
-  await db.runAsync('UPDATE habits SET streak = ?, last_completed_date = ? WHERE id = ?', [streak, lastCompletedDate, habitId]);
-  return; 
+export async function getHabit(id: string): Promise<Habit | null> {
+  const row = await db.getFirstAsync('SELECT * FROM habits WHERE id = ?', [id]);
+  return row ? rowToHabit(row) : null;
+}
+
+export async function markHabitDone(id: string): Promise<Habit | null> {
+  const habit = await getHabit(id);
+  if (!habit) return null;
+
+  const today = todayISO();
+  if (habit.lastCompletedISO === today) return habit; 
+
+  const yesterday = yesterdayISO();
+  if (habit.lastCompletedISO === yesterday) {
+    habit.streak += 1;
+  } else {
+    habit.streak = 1;
+  }
+  habit.lastCompletedISO = today;
+
+  await updateHabit(habit);
+  return habit;
+}
+
+export async function unmarkHabitDone(id: string): Promise<Habit | null> {
+  const habit = await getHabit(id);
+  if (!habit) return null;
+
+  const today = todayISO();
+  if (habit.lastCompletedISO !== today) return habit;
+
+  habit.lastCompletedISO = null;
+  if (habit.streak > 0) habit.streak -= 1;
+
+  await updateHabit(habit);
+  return habit;
+}
+
+export function isScheduledToday(habit: Habit): boolean {
+  if (habit.frequency.kind === 'daily') return true;
+  const jsDay = new Date().getDay(); 
+  const mappedDay = jsDay === 0 ? 6 : jsDay - 1; 
+  return habit.frequency.weekdays.includes(mappedDay);
+}
+
+export function todayComplete(habit: Habit): boolean {
+  return habit.lastCompletedISO === todayISO();
 }

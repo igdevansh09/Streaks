@@ -1,94 +1,155 @@
 import { useState, useEffect, useCallback } from 'react';
-import { parse, format, differenceInCalendarDays } from 'date-fns';
-import * as Haptics from 'expo-haptics';
-import { Habit, DateString } from '../lib/habits/types';
-import { getAllHabitsFromDB, saveNewHabitToDB, updateHabitRemindersInDB, deleteHabitFromDB, updateStreakInDB } from '../lib/habits/storage';
+import {
+  loadHabits,
+  createHabit as storageCreate,
+  updateHabit as storageUpdate,
+  deleteHabit as storageDelete,
+  markHabitDone as storageMarkDone,
+  unmarkHabitDone as storageUnmarkDone,
+  isScheduledToday,
+  todayComplete,
+} from '../lib/habits/storage';
+import {
+  scheduleHabitReminders,
+  cancelHabitReminders,
+  rescheduleHabitReminders,
+} from '../lib/notifications/schedule';
+import { Habit, Frequency } from '../lib/habits/types';
+
+
+export type CreateHabitInput = {
+  name: string;
+  emoji: string;
+  frequency: Frequency;
+};
+
+export type EditHabitInput = CreateHabitInput & { id: string };
+
 
 export function useHabits() {
   const [habits, setHabits] = useState<Habit[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState(true);
 
-  const fetchHabits = useCallback(async (): Promise<void> => {
-    try {
-      setIsLoading(true);
-      const data = await getAllHabitsFromDB();
-      setHabits(data);
-    } catch (e) {
-      console.error('Failed fetching data from database store:', e);
-    } finally {
-      setIsLoading(false);
+  useEffect(() => {
+    let cancelled = false;
+    loadHabits().then((data) => {
+      if (!cancelled) {
+        setHabits(data);
+        setLoading(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const todayHabits = habits.filter(isScheduledToday);
+  const doneCount = todayHabits.filter(todayComplete).length;
+  const pendingCount = todayHabits.length - doneCount;
+
+  const createHabit = useCallback(async (input: CreateHabitInput): Promise<Habit> => {
+    const notificationIds = await scheduleHabitReminders({
+      id: '__pending__',
+      ...input,
+    });
+
+    const habit = await storageCreate(input.name, input.emoji, input.frequency, notificationIds);
+
+    if (notificationIds.length > 0) {
+      await cancelHabitReminders(notificationIds);
+      const realIds = await scheduleHabitReminders(habit);
+      const updated: Habit = { ...habit, notificationIds: realIds };
+      await storageUpdate(updated);
+      setHabits((prev) => [...prev, updated]);
+      return updated;
+    }
+
+    setHabits((prev) => [...prev, habit]);
+    return habit;
+  }, []);
+
+  const editHabit = useCallback(
+    async (input: EditHabitInput): Promise<void> => {
+      const existing = habits.find((h) => h.id === input.id);
+      if (!existing) return;
+
+      const newIds = await rescheduleHabitReminders(existing.notificationIds, {
+        id: existing.id,
+        name: input.name,
+        emoji: input.emoji,
+        frequency: input.frequency,
+      });
+
+      const updated: Habit = {
+        ...existing,
+        name: input.name,
+        emoji: input.emoji,
+        frequency: input.frequency,
+        notificationIds: newIds,
+      };
+
+      await storageUpdate(updated);
+      setHabits((prev) => prev.map((h) => (h.id === input.id ? updated : h)));
+    },
+    [habits],
+  );
+
+  const deleteHabit = useCallback(
+    async (id: string): Promise<void> => {
+      const habit = habits.find((h) => h.id === id);
+      if (habit) {
+        await cancelHabitReminders(habit.notificationIds);
+      }
+      await storageDelete(id);
+      setHabits((prev) => prev.filter((h) => h.id !== id));
+    },
+    [habits],
+  );
+
+  const markDone = useCallback(async (id: string): Promise<void> => {
+    const updated = await storageMarkDone(id);
+    if (updated) {
+      setHabits((prev) => prev.map((h) => (h.id === id ? updated : h)));
     }
   }, []);
 
-  useEffect(() => {
-    fetchHabits();
-  }, [fetchHabits]);
-
-  const addHabit = async (name: string, emoji: string, frequency: Habit['frequency']): Promise<void> => {
-    const freshHabit: Omit<Habit, 'notificationIds'> = {
-      id: Math.random().toString(36).substring(2, 9),
-      name,
-      emoji,
-      frequency,
-      streak: 0,
-      lastCompletedDate: null,
-    };
-    const fullyFormed = await saveNewHabitToDB(freshHabit);
-    setHabits((prev) => [...prev, fullyFormed]);
-    
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  };
-
-  const editHabit = async (id: string, name: string, emoji: string, frequency: Habit['frequency']): Promise<void> => {
-    const updatedDetails = { name, emoji, frequency };
-    const replacementIds = await updateHabitRemindersInDB(id, updatedDetails);
-    
-    setHabits((prev) =>
-      prev.map((h) => (h.id === id ? { ...h, ...updatedDetails, id, notificationIds: replacementIds } : h))
-    );
-  };
-
-  const removeHabit = async (id: string): Promise<void> => {
-    await deleteHabitFromDB(id);
-    setHabits((prev) => prev.filter((h) => h.id !== id));
-    
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-  };
-
-  const toggleHabitCompletion = async (id: string): Promise<void> => {
-    const target = habits.find((h) => h.id === id);
-    if (!target) return;
-
-    const todayStr = format(new Date(), 'dd-MM-yyyy');
-    let finalStreak = target.streak;
-    let finalDate: DateString | null = todayStr;
-
-    if (target.lastCompletedDate === todayStr) {
-      finalStreak = Math.max(0, finalStreak - 1);
-      finalDate = null; 
-      
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } else {
-      if (target.lastCompletedDate) {
-        const lastDateObj = parse(target.lastCompletedDate, 'dd-MM-yyyy', new Date());
-        const delta = differenceInCalendarDays(new Date(), lastDateObj);
-        
-        if (delta === 1) {
-          finalStreak += 1;
-        } else if (delta > 1) {
-          finalStreak = 1; 
-        }
-      } else {
-        finalStreak = 1;
-      }
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  const unmarkDone = useCallback(async (id: string): Promise<void> => {
+    const updated = await storageUnmarkDone(id);
+    if (updated) {
+      setHabits((prev) => prev.map((h) => (h.id === id ? updated : h)));
     }
+  }, []);
 
-    await updateStreakInDB(id, finalStreak, finalDate);
-    setHabits((prev) =>
-      prev.map((h) => (h.id === id ? { ...h, streak: finalStreak, lastCompletedDate: finalDate } : h))
-    );
+  const toggleDone = useCallback(
+    async (id: string): Promise<void> => {
+      const habit = habits.find((h) => h.id === id);
+      if (!habit) return;
+      if (todayComplete(habit)) {
+        await unmarkDone(id);
+      } else {
+        await markDone(id);
+      }
+    },
+    [habits, markDone, unmarkDone],
+  );
+
+  const refresh = useCallback(async () => {
+    const data = await loadHabits();
+    setHabits(data);
+  }, []);
+
+  return {
+    habits,
+    todayHabits,
+    loading,
+    doneCount,
+    pendingCount,
+    createHabit,
+    editHabit,
+    deleteHabit,
+    markDone,
+    unmarkDone,
+    toggleDone,
+    refresh,
   };
-
-  return { habits, isLoading, addHabit, editHabit, removeHabit, toggleHabitCompletion, refresh: fetchHabits };
 }
