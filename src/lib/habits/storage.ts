@@ -1,7 +1,7 @@
-import * as SQLite from 'expo-sqlite';
-import { Habit, Frequency } from './types';
+import * as SQLite from "expo-sqlite";
+import { Frequency, Habit } from "./types";
 
-const db = SQLite.openDatabaseSync('habitflow.db');
+const db = SQLite.openDatabaseSync("streaks.db");
 
 db.execSync(`
   CREATE TABLE IF NOT EXISTS habits (
@@ -45,7 +45,7 @@ function rowToHabit(row: any): Habit {
 
 export async function loadHabits(): Promise<Habit[]> {
   try {
-    const rows = await db.getAllAsync('SELECT * FROM habits');
+    const rows = await db.getAllAsync("SELECT * FROM habits");
     return rows.map(rowToHabit);
   } catch {
     return [];
@@ -55,7 +55,7 @@ export async function loadHabits(): Promise<Habit[]> {
 export async function saveHabits(habits: Habit[]): Promise<void> {
   try {
     await db.withTransactionAsync(async () => {
-      await db.runAsync('DELETE FROM habits');
+      await db.runAsync("DELETE FROM habits");
       for (const habit of habits) {
         await db.runAsync(
           `INSERT INTO habits (id, name, emoji, frequency, notificationIds, streak, lastCompletedISO, createdAt)
@@ -68,13 +68,13 @@ export async function saveHabits(habits: Habit[]): Promise<void> {
             JSON.stringify(habit.notificationIds),
             habit.streak,
             habit.lastCompletedISO,
-            habit.createdAt
-          ]
+            habit.createdAt,
+          ],
         );
       }
     });
   } catch (e) {
-    console.warn('[storage] saveHabits failed:', e);
+    console.warn("[storage] saveHabits failed:", e);
   }
 }
 
@@ -106,8 +106,8 @@ export async function createHabit(
       JSON.stringify(habit.notificationIds),
       habit.streak,
       habit.lastCompletedISO,
-      habit.createdAt
-    ]
+      habit.createdAt,
+    ],
   );
 
   return habit;
@@ -126,17 +126,17 @@ export async function updateHabit(updated: Habit): Promise<void> {
       updated.streak,
       updated.lastCompletedISO,
       updated.createdAt,
-      updated.id
-    ]
+      updated.id,
+    ],
   );
 }
 
 export async function deleteHabit(id: string): Promise<void> {
-  await db.runAsync('DELETE FROM habits WHERE id = ?', [id]);
+  await db.runAsync("DELETE FROM habits WHERE id = ?", [id]);
 }
 
 export async function getHabit(id: string): Promise<Habit | null> {
-  const row = await db.getFirstAsync('SELECT * FROM habits WHERE id = ?', [id]);
+  const row = await db.getFirstAsync("SELECT * FROM habits WHERE id = ?", [id]);
   return row ? rowToHabit(row) : null;
 }
 
@@ -145,7 +145,7 @@ export async function markHabitDone(id: string): Promise<Habit | null> {
   if (!habit) return null;
 
   const today = todayISO();
-  if (habit.lastCompletedISO === today) return habit; 
+  if (habit.lastCompletedISO === today) return habit;
 
   const yesterday = yesterdayISO();
   if (habit.lastCompletedISO === yesterday) {
@@ -174,9 +174,9 @@ export async function unmarkHabitDone(id: string): Promise<Habit | null> {
 }
 
 export function isScheduledToday(habit: Habit): boolean {
-  if (habit.frequency.kind === 'daily') return true;
-  const jsDay = new Date().getDay(); 
-  const mappedDay = jsDay === 0 ? 6 : jsDay - 1; 
+  if (habit.frequency.kind === "daily") return true;
+  const jsDay = new Date().getDay();
+  const mappedDay = jsDay === 0 ? 6 : jsDay - 1;
   return habit.frequency.weekdays.includes(mappedDay);
 }
 

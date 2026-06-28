@@ -1,9 +1,9 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { useColorScheme } from 'react-native';
-import { ThemeMode } from '../lib/habits/types';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { useColorScheme } from "react-native";
+import { ThemeMode } from "../lib/habits/types";
 
-const THEME_KEY = '@habitflow/theme';
+const THEME_KEY = "@streaks/theme";
 
 export type ThemeColors = {
   bg: string;
@@ -22,35 +22,35 @@ export type ThemeColors = {
 };
 
 const LIGHT: ThemeColors = {
-  bg: '#ffffff',
-  bg2: '#f5f5f5',
-  bg3: '#ebebeb',
-  card: '#ffffff',
-  text: '#0a0a0a',
-  text2: '#555555',
-  text3: '#888888',
-  border: '#e0e0e0',
-  border2: '#c8c8c8',
-  accent: '#0a0a0a',
-  accentText: '#ffffff',
-  danger: '#e24b4a',
-  success: '#1D9E75',
+  bg: "#ffffff",
+  bg2: "#f5f5f5",
+  bg3: "#ebebeb",
+  card: "#ffffff",
+  text: "#0a0a0a",
+  text2: "#555555",
+  text3: "#888888",
+  border: "#e0e0e0",
+  border2: "#c8c8c8",
+  accent: "#0a0a0a",
+  accentText: "#ffffff",
+  danger: "#e24b4a",
+  success: "#1D9E75",
 };
 
 const DARK: ThemeColors = {
-  bg: '#111111',
-  bg2: '#1a1a1a',
-  bg3: '#222222',
-  card: '#1a1a1a',
-  text: '#f0f0f0',
-  text2: '#aaaaaa',
-  text3: '#666666',
-  border: '#2a2a2a',
-  border2: '#3a3a3a',
-  accent: '#f0f0f0',
-  accentText: '#111111',
-  danger: '#e24b4a',
-  success: '#1D9E75',
+  bg: "#111111",
+  bg2: "#1a1a1a",
+  bg3: "#222222",
+  card: "#1a1a1a",
+  text: "#f0f0f0",
+  text2: "#aaaaaa",
+  text3: "#666666",
+  border: "#2a2a2a",
+  border2: "#3a3a3a",
+  accent: "#f0f0f0",
+  accentText: "#111111",
+  danger: "#e24b4a",
+  success: "#1D9E75",
 };
 
 type ThemeContextValue = {
@@ -61,7 +61,7 @@ type ThemeContextValue = {
 };
 
 const ThemeContext = createContext<ThemeContextValue>({
-  mode: 'system',
+  mode: "system",
   colors: LIGHT,
   setMode: () => {},
   isDark: false,
@@ -69,11 +69,11 @@ const ThemeContext = createContext<ThemeContextValue>({
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const systemScheme = useColorScheme();
-  const [mode, setModeState] = useState<ThemeMode>('system');
+  const [mode, setModeState] = useState<ThemeMode>("system");
 
   useEffect(() => {
     AsyncStorage.getItem(THEME_KEY).then((v) => {
-      if (v === 'light' || v === 'dark' || v === 'system') {
+      if (v === "light" || v === "dark" || v === "system") {
         setModeState(v);
       }
     });
@@ -87,13 +87,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   let colors: ThemeColors;
   let isDark = false;
 
-  if (mode === 'light') {
+  if (mode === "light") {
     colors = LIGHT;
-  } else if (mode === 'dark') {
+  } else if (mode === "dark") {
     colors = DARK;
     isDark = true;
   } else {
-    isDark = systemScheme === 'dark';
+    isDark = systemScheme === "dark";
     colors = isDark ? DARK : LIGHT;
   }
 

@@ -1,7 +1,7 @@
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 
-export const CHANNEL_ID = "habitflow-reminders";
+export const CHANNEL_ID = "streaks-reminders";
 export const CHANNEL_NAME = "Habit Reminders";
 
 export async function createAndroidChannel(): Promise<void> {

@@ -29,7 +29,6 @@ function formatFreq(h: Habit) {
   return `${h.frequency.weekdays.map((i) => labels[i]).join(', ')} · ${time}`;
 }
 
-
 function StatCard({
   label,
   value,
@@ -56,7 +55,6 @@ function StatCard({
     </View>
   );
 }
-
 
 export default function HabitDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -108,7 +106,7 @@ export default function HabitDetailScreen() {
         </Text>
         <TouchableOpacity
           style={{ padding: 14, borderRadius: 8, backgroundColor: colors.text }}
-          onPress={() => router.replace('/(tabs)/index')}
+          onPress={() => router.replace('/(tabs)')}
         >
           <Text style={{ color: colors.bg, fontWeight: '700' }}>Go to Today</Text>
         </TouchableOpacity>

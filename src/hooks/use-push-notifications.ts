@@ -1,13 +1,13 @@
-import { useState, useEffect, useRef } from 'react';
-import * as Notifications from 'expo-notifications';
-import { useRouter } from 'expo-router';
-import { registerForPushNotifications } from '../lib/notifications/push';
+import * as Notifications from "expo-notifications";
+import { useRouter } from "expo-router";
+import { useEffect, useRef, useState } from "react";
+import { NotificationData } from "../lib/habits/types";
+import { registerForPushNotifications } from "../lib/notifications/push";
 import {
   getPermissionStatus,
-  requestPermission,
   PermissionStatus,
-} from '../lib/notifications/setup';
-import { NotificationData } from '../lib/habits/types';
+  requestPermission,
+} from "../lib/notifications/setup";
 
 type PushState = {
   token: string | null;
@@ -18,17 +18,22 @@ type PushState = {
 
 export function usePushNotifications() {
   const router = useRouter();
-  const notificationListener = useRef<Notifications.EventSubscription | null>(null);
+
+  const notificationListener = useRef<Notifications.EventSubscription | null>(
+    null,
+  );
   const responseListener = useRef<Notifications.EventSubscription | null>(null);
 
   const [state, setState] = useState<PushState>({
     token: null,
     tokenError: null,
     registering: false,
-    permissionStatus: 'undetermined',
+    permissionStatus: "undetermined",
   });
 
-  const handleNotificationResponse = (response: Notifications.NotificationResponse) => {
+  const handleNotificationResponse = (
+    response: Notifications.NotificationResponse,
+  ) => {
     const data = response.notification.request.content.data as
       | NotificationData
       | undefined
@@ -37,8 +42,8 @@ export function usePushNotifications() {
     if (!data) return;
 
     if (
-      data.screen === '/habit' &&
-      typeof data.habitId === 'string' &&
+      data.screen === "/habit" &&
+      typeof data.habitId === "string" &&
       data.habitId.length > 0
     ) {
       router.push(`/habit/${data.habitId}`);
@@ -46,16 +51,24 @@ export function usePushNotifications() {
   };
 
   useEffect(() => {
-    getPermissionStatus().then((status) =>
-      setState((s) => ({ ...s, permissionStatus: status })),
-    );
-    Notifications.getLastNotificationResponseAsync().then((response) => {
-      if (response) handleNotificationResponse(response);
+    let isMounted = true;
+
+    getPermissionStatus().then((status) => {
+      if (isMounted) setState((s) => ({ ...s, permissionStatus: status }));
     });
 
+    const response = Notifications.getLastNotificationResponse();
+
+    if (response && isMounted) {
+      setTimeout(() => {
+        if (isMounted) {
+          handleNotificationResponse(response);
+        }
+      }, 0);
+    }
+
     notificationListener.current =
-      Notifications.addNotificationReceivedListener((_notification) => {
-      });
+      Notifications.addNotificationReceivedListener((_notification) => {});
 
     responseListener.current =
       Notifications.addNotificationResponseReceivedListener(
@@ -63,9 +76,11 @@ export function usePushNotifications() {
       );
 
     return () => {
+      isMounted = false;
       notificationListener.current?.remove();
       responseListener.current?.remove();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const register = async (): Promise<void> => {

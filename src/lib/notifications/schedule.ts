@@ -13,7 +13,6 @@ export async function scheduleHabitReminders(
     const content: Notifications.NotificationContentInput = {
       title: `Time for ${habit.emoji} ${habit.name}`,
       body: 'Tap to log it.',
-      sound: 'default',
       data: {
         screen: '/habit',
         habitId: habit.id,

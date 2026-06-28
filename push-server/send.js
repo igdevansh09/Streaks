@@ -1,9 +1,9 @@
-const { Expo } = require('expo-server-sdk');
+const { Expo } = require("expo-server-sdk");
 
 const expo = new Expo();
 
-const TOKEN = process.env.EXPO_TOKEN || 'ExponentPushToken[REPLACE_ME]';
-const HABIT_ID = process.env.HABIT_ID || 'REPLACE_WITH_REAL_HABIT_ID';
+const TOKEN = process.env.EXPO_TOKEN || "ExponentPushToken[REPLACE_ME]";
+const HABIT_ID = process.env.HABIT_ID || "REPLACE_WITH_REAL_HABIT_ID";
 
 async function sendPush() {
   if (!Expo.isExpoPushToken(TOKEN)) {
@@ -14,14 +14,14 @@ async function sendPush() {
   const messages = [
     {
       to: TOKEN,
-      sound: 'default',
-      title: '🔔 HabitFlow Reminder',
-      body: 'Time to complete your habit! Tap to log it.',
+      sound: "default",
+      title: "🔔 streaks Reminder",
+      body: "Time to complete your habit! Tap to log it.",
       data: {
-        screen: '/habit',
+        screen: "/habit",
         habitId: HABIT_ID,
       },
-      channelId: 'habitflow-reminders',
+      channelId: "streaks-reminders",
     },
   ];
 
@@ -32,18 +32,16 @@ async function sendPush() {
     try {
       const ticketChunk = await expo.sendPushNotificationsAsync(chunk);
       tickets.push(...ticketChunk);
-      console.log('✅ Tickets received:', JSON.stringify(ticketChunk, null, 2));
+      console.log("✅ Tickets received:", JSON.stringify(ticketChunk, null, 2));
     } catch (e) {
-      console.error('❌ Send error:', e);
+      console.error("❌ Send error:", e);
     }
   }
 
-  const receiptIds = tickets
-    .filter((t) => t.status === 'ok')
-    .map((t) => t.id);
+  const receiptIds = tickets.filter((t) => t.status === "ok").map((t) => t.id);
 
   if (receiptIds.length === 0) {
-    console.log('No receipt IDs to check (tickets may have errored).');
+    console.log("No receipt IDs to check (tickets may have errored).");
     return;
   }
 
@@ -52,17 +50,20 @@ async function sendPush() {
     try {
       const receipts = await expo.getPushNotificationReceiptsAsync(chunk);
       for (const [id, receipt] of Object.entries(receipts)) {
-        if (receipt.status === 'ok') {
+        if (receipt.status === "ok") {
           console.log(`✅ Receipt ${id}: delivered`);
-        } else if (receipt.status === 'error') {
+        } else if (receipt.status === "error") {
           console.error(`❌ Receipt ${id} error:`, receipt.message);
-          if (receipt.details?.error === 'DeviceNotRegistered') {
-            console.warn('⚠️  DeviceNotRegistered — drop this token from your DB:', TOKEN);
+          if (receipt.details?.error === "DeviceNotRegistered") {
+            console.warn(
+              "⚠️  DeviceNotRegistered — drop this token from your DB:",
+              TOKEN,
+            );
           }
         }
       }
     } catch (e) {
-      console.error('Receipt check error:', e);
+      console.error("Receipt check error:", e);
     }
   }
 }
