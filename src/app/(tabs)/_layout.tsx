@@ -69,6 +69,15 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="push"
+        options={{
+          title: 'Push',
+          tabBarIcon: ({ focused, color }) => (
+            <TabIcon name="notifications" focused={focused} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="settings"
         options={{
           title: 'Settings',

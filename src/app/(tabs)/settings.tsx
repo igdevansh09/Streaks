@@ -8,7 +8,7 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
-import * as Clipboard from "expo-clipboard"
+import * as Clipboard from 'expo-clipboard';
 import { useState, useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,7 +26,6 @@ import {
   cancelAllScheduled,
 } from '../../lib/notifications/schedule';
 import { ThemeMode } from '../../lib/habits/types';
-
 
 function SectionLabel({ label, colors }: { label: string; colors: any }) {
   return (
@@ -60,29 +59,14 @@ function Divider({ colors }: { colors: any }) {
 type BtnVariant = 'dark' | 'outline' | 'danger';
 
 function BlockBtn({
-  label,
-  onPress,
-  variant = 'dark',
-  colors,
-  loading,
-  icon,
+  label, onPress, variant = 'dark', colors, loading,
 }: {
-  label: string;
-  onPress: () => void;
-  variant?: BtnVariant;
-  colors: any;
-  loading?: boolean;
-  icon?: string;
+  label: string; onPress: () => void; variant?: BtnVariant;
+  colors: any; loading?: boolean;
 }) {
-  const bg =
-    variant === 'dark' ? colors.text :
-    variant === 'danger' ? 'transparent' : 'transparent';
-  const textColor =
-    variant === 'dark' ? colors.bg :
-    variant === 'danger' ? colors.danger : colors.text;
-  const border =
-    variant === 'dark' ? colors.text :
-    variant === 'danger' ? colors.danger : colors.border2;
+  const bg = variant === 'dark' ? colors.text : 'transparent';
+  const textColor = variant === 'dark' ? colors.bg : variant === 'danger' ? colors.danger : colors.text;
+  const border = variant === 'dark' ? colors.text : variant === 'danger' ? colors.danger : colors.border2;
 
   return (
     <TouchableOpacity
@@ -97,8 +81,11 @@ function BlockBtn({
       {loading ? (
         <ActivityIndicator color={textColor} size="small" />
       ) : (
-        <Text style={{ fontSize: 13, fontWeight: '700', letterSpacing: 0.5, color: textColor, textTransform: 'uppercase' }}>
-          {icon ? `${icon}  ` : ''}{label}
+        <Text style={{
+          fontSize: 13, fontWeight: '700', letterSpacing: 0.5,
+          color: textColor, textTransform: 'uppercase',
+        }}>
+          {label}
         </Text>
       )}
     </TouchableOpacity>
@@ -144,7 +131,10 @@ export default function SettingsScreen() {
         body: 'Deep link tap → habit detail screen.',
         data: { screen: '/habit', habitId: 'test' },
       },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 3 },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: 3,
+      },
     });
     Alert.alert('Scheduled', 'Test notification fires in 3 seconds.');
     setTimeout(refreshCount, 500);
@@ -164,15 +154,19 @@ export default function SettingsScreen() {
     );
   };
 
-  const handleCopyToken = () => {
+  const handleCopyToken = async () => {
     if (token) {
-      Clipboard.setStringAsync(token);
+      await Clipboard.setStringAsync(token);       
       Alert.alert('Copied', 'Push token copied to clipboard.');
     }
   };
 
-  const permLabel = permStatus === 'granted' ? 'GRANTED' : permStatus === 'denied' ? 'DENIED' : 'UNDETERMINED';
-  const permColor = permStatus === 'granted' ? colors.success : permStatus === 'denied' ? colors.danger : colors.text3;
+  const permLabel =
+    permStatus === 'granted' ? 'GRANTED' :
+    permStatus === 'denied' ? 'DENIED' : 'UNDETERMINED';
+  const permColor =
+    permStatus === 'granted' ? colors.success :
+    permStatus === 'denied' ? colors.danger : colors.text3;
 
   const themes: { label: string; val: ThemeMode }[] = [
     { label: 'Light', val: 'light' },
@@ -183,7 +177,10 @@ export default function SettingsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
       <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 }}>
-        <Text style={{ fontSize: 11, fontWeight: '600', letterSpacing: 1, color: colors.text3, textTransform: 'uppercase', marginBottom: 4 }}>
+        <Text style={{
+          fontSize: 11, fontWeight: '600', letterSpacing: 1, color: colors.text3,
+          textTransform: 'uppercase', marginBottom: 4,
+        }}>
           CONFIG
         </Text>
         <Text style={{ fontSize: 32, fontWeight: '700', color: colors.text }}>Settings</Text>
@@ -193,6 +190,7 @@ export default function SettingsScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
 
+        {/* ── Appearance ── */}
         <SectionLabel label="Appearance" colors={colors} />
         <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 20 }}>
           {themes.map((t) => (
@@ -207,7 +205,8 @@ export default function SettingsScreen() {
               }}
             >
               <Text style={{
-                fontSize: 12, fontWeight: '600', color: mode === t.val ? colors.bg : colors.text2,
+                fontSize: 12, fontWeight: '600',
+                color: mode === t.val ? colors.bg : colors.text2,
               }}>
                 {t.label}
               </Text>
@@ -217,10 +216,14 @@ export default function SettingsScreen() {
 
         <Divider colors={colors} />
 
+        {/* ── Notifications ── */}
         <SectionLabel label="Notifications" colors={colors} />
         <Row colors={colors}>
           <Text style={{ fontSize: 15, fontWeight: '500', color: colors.text }}>Permission</Text>
-          <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, backgroundColor: permColor }}>
+          <View style={{
+            paddingHorizontal: 10, paddingVertical: 4,
+            borderRadius: 20, backgroundColor: permColor,
+          }}>
             <Text style={{ fontSize: 11, fontWeight: '700', color: '#fff', letterSpacing: 0.5 }}>
               {permLabel}
             </Text>
@@ -234,6 +237,7 @@ export default function SettingsScreen() {
 
         <Divider colors={colors} />
 
+        {/* ── Push Token ── */}
         <SectionLabel label="Push Token" colors={colors} />
         <Text style={{ paddingHorizontal: 20, fontSize: 12, color: colors.text3, lineHeight: 18 }}>
           Push notifications do NOT work in Expo Go. Create a development build with EAS to get an Expo push token.
@@ -253,7 +257,11 @@ export default function SettingsScreen() {
               backgroundColor: colors.bg2, borderRadius: 8, padding: 12,
               borderWidth: 0.5, borderColor: colors.border,
             }}>
-              <Text style={{ fontSize: 11, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', color: colors.text2, lineHeight: 18 }}>
+              <Text style={{
+                fontSize: 11,
+                fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+                color: colors.text2, lineHeight: 18,
+              }}>
                 {token}
               </Text>
             </View>
@@ -266,7 +274,10 @@ export default function SettingsScreen() {
               onPress={handleCopyToken}
             >
               <Ionicons name="copy-outline" size={16} color={colors.text} />
-              <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+              <Text style={{
+                fontSize: 13, fontWeight: '700', color: colors.text,
+                letterSpacing: 0.5, textTransform: 'uppercase',
+              }}>
                 Copy Token
               </Text>
             </TouchableOpacity>
@@ -274,13 +285,17 @@ export default function SettingsScreen() {
         )}
 
         {tokenError && (
-          <Text style={{ marginHorizontal: 20, marginTop: 8, fontSize: 12, color: colors.danger, lineHeight: 18 }}>
+          <Text style={{
+            marginHorizontal: 20, marginTop: 8, fontSize: 12,
+            color: colors.danger, lineHeight: 18,
+          }}>
             {tokenError}
           </Text>
         )}
 
         <Divider colors={colors} />
 
+        {/* ── Debug ── */}
         <SectionLabel label="Debug" colors={colors} />
 
         <Row colors={colors}>

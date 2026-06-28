@@ -48,60 +48,48 @@ export function useHabits() {
   const pendingCount = todayHabits.length - doneCount;
 
   const createHabit = useCallback(async (input: CreateHabitInput): Promise<Habit> => {
-    const notificationIds = await scheduleHabitReminders({
-      id: '__pending__',
-      ...input,
-    });
-
-    const habit = await storageCreate(input.name, input.emoji, input.frequency, notificationIds);
-
-    if (notificationIds.length > 0) {
-      await cancelHabitReminders(notificationIds);
-      const realIds = await scheduleHabitReminders(habit);
-      const updated: Habit = { ...habit, notificationIds: realIds };
-      await storageUpdate(updated);
-      setHabits((prev) => [...prev, updated]);
-      return updated;
-    }
-
-    setHabits((prev) => [...prev, habit]);
-    return habit;
+    const habit = await storageCreate(input.name, input.emoji, input.frequency, []);
+    const notificationIds = await scheduleHabitReminders(habit);
+    const finalHabit: Habit = { ...habit, notificationIds };
+    await storageUpdate(finalHabit);
+    setHabits((prev) => [...prev, finalHabit]);
+    return finalHabit;
   }, []);
 
   const editHabit = useCallback(
     async (input: EditHabitInput): Promise<void> => {
-      const existing = habits.find((h) => h.id === input.id);
-      if (!existing) return;
+    const existing = habits.find((h) => h.id === input.id);
+    if (!existing) return;
 
-      const newIds = await rescheduleHabitReminders(existing.notificationIds, {
-        id: existing.id,
-        name: input.name,
-        emoji: input.emoji,
-        frequency: input.frequency,
-      });
+    const newIds = await rescheduleHabitReminders(existing.notificationIds, {
+      id: existing.id,
+      name: input.name,
+      emoji: input.emoji,
+      frequency: input.frequency,
+    });
 
-      const updated: Habit = {
-        ...existing,
-        name: input.name,
-        emoji: input.emoji,
-        frequency: input.frequency,
-        notificationIds: newIds,
-      };
+    const updated: Habit = {
+      ...existing,
+      name: input.name,
+      emoji: input.emoji,
+      frequency: input.frequency,
+      notificationIds: newIds,
+    };
 
-      await storageUpdate(updated);
-      setHabits((prev) => prev.map((h) => (h.id === input.id ? updated : h)));
+    await storageUpdate(updated);
+    setHabits((prev) => prev.map((h) => (h.id === input.id ? updated : h)));
     },
     [habits],
   );
 
   const deleteHabit = useCallback(
     async (id: string): Promise<void> => {
-      const habit = habits.find((h) => h.id === id);
-      if (habit) {
-        await cancelHabitReminders(habit.notificationIds);
-      }
-      await storageDelete(id);
-      setHabits((prev) => prev.filter((h) => h.id !== id));
+    const habit = habits.find((h) => h.id === id);
+    if (habit) {
+      await cancelHabitReminders(habit.notificationIds);
+    }
+    await storageDelete(id);
+    setHabits((prev) => prev.filter((h) => h.id !== id));
     },
     [habits],
   );
@@ -122,8 +110,8 @@ export function useHabits() {
 
   const toggleDone = useCallback(
     async (id: string): Promise<void> => {
-      const habit = habits.find((h) => h.id === id);
-      if (!habit) return;
+    const habit = habits.find((h) => h.id === id);
+    if (!habit) return;
       if (todayComplete(habit)) {
         await unmarkDone(id);
       } else {
