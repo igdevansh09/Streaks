@@ -1,11 +1,11 @@
-import { Tabs } from 'expo-router';
-import { Platform } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../../components/ThemeContext';
+import { Ionicons } from "@expo/vector-icons";
+import { Tabs } from "expo-router";
+import { Platform } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTheme } from "../../context/ThemeContext";
 
-type IconName = React.ComponentProps<typeof Ionicons>['name'];
-type IconColor = React.ComponentProps<typeof Ionicons>['color'];
-
+type IconName = React.ComponentProps<typeof Ionicons>["name"];
+type IconColor = React.ComponentProps<typeof Ionicons>["color"];
 
 function TabIcon({
   name,
@@ -27,6 +27,7 @@ function TabIcon({
 
 export default function TabsLayout() {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
 
   return (
     <Tabs
@@ -38,22 +39,23 @@ export default function TabsLayout() {
           backgroundColor: colors.bg,
           borderTopColor: colors.border,
           borderTopWidth: 0.5,
-          height: Platform.OS === 'ios' ? 84 : 64,
-          paddingBottom: Platform.OS === 'ios' ? 28 : 8,
+          height:
+            Platform.OS === "ios" ? 84 + insets.bottom : 64 + insets.bottom,
+          paddingBottom: Platform.OS === "ios" ? 28 : 8,
           paddingTop: 8,
         },
         tabBarLabelStyle: {
           fontSize: 10,
-          fontWeight: '600',
+          fontWeight: "600",
           letterSpacing: 0.3,
-          textTransform: 'uppercase',
+          textTransform: "uppercase",
         },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Today',
+          title: "Today",
           tabBarIcon: ({ focused, color }) => (
             <TabIcon name="checkbox" focused={focused} color={color} />
           ),
@@ -62,25 +64,16 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="streaks"
         options={{
-          title: 'Streaks',
+          title: "Streaks",
           tabBarIcon: ({ focused, color }) => (
             <TabIcon name="grid" focused={focused} color={color} />
           ),
         }}
       />
       <Tabs.Screen
-        name="push"
-        options={{
-          title: 'Push',
-          tabBarIcon: ({ focused, color }) => (
-            <TabIcon name="notifications" focused={focused} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="settings"
         options={{
-          title: 'Settings',
+          title: "Settings",
           tabBarIcon: ({ focused, color }) => (
             <TabIcon name="settings" focused={focused} color={color} />
           ),

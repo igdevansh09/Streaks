@@ -1,4 +1,4 @@
-import Constants from "expo-constants";
+import Constants, { ExecutionEnvironment } from "expo-constants";
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
@@ -15,7 +15,7 @@ export async function registerForPushNotifications(): Promise<PushRegistrationRe
     };
   }
 
-  const isExpoGo = Constants.appOwnership === "expo";
+  const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
   if (isExpoGo) {
     return {
       success: false,

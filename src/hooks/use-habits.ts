@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   loadHabits,
   createHabit as storageCreate,
@@ -16,7 +16,6 @@ import {
 } from '../lib/notifications/schedule';
 import { Habit, Frequency } from '../lib/habits/types';
 
-
 export type CreateHabitInput = {
   name: string;
   emoji: string;
@@ -25,10 +24,14 @@ export type CreateHabitInput = {
 
 export type EditHabitInput = CreateHabitInput & { id: string };
 
-
 export function useHabits() {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const habitsRef = useRef<Habit[]>([]);
+  useEffect(() => {
+    habitsRef.current = habits;
+  }, [habits]);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,9 +46,15 @@ export function useHabits() {
     };
   }, []);
 
-  const todayHabits = habits.filter(isScheduledToday);
-  const doneCount = todayHabits.filter(todayComplete).length;
-  const pendingCount = todayHabits.length - doneCount;
+  const { todayHabits, doneCount, pendingCount } = useMemo(() => {
+    const today = habits.filter(isScheduledToday);
+    const done = today.filter(todayComplete).length;
+    return {
+      todayHabits: today,
+      doneCount: done,
+      pendingCount: today.length - done,
+    };
+  }, [habits]);
 
   const createHabit = useCallback(async (input: CreateHabitInput): Promise<Habit> => {
     const habit = await storageCreate(input.name, input.emoji, input.frequency, []);
@@ -54,11 +63,10 @@ export function useHabits() {
     await storageUpdate(finalHabit);
     setHabits((prev) => [...prev, finalHabit]);
     return finalHabit;
-  }, []);
+  }, []); 
 
-  const editHabit = useCallback(
-    async (input: EditHabitInput): Promise<void> => {
-    const existing = habits.find((h) => h.id === input.id);
+  const editHabit = useCallback(async (input: EditHabitInput): Promise<void> => {
+    const existing = habitsRef.current.find((h) => h.id === input.id);
     if (!existing) return;
 
     const newIds = await rescheduleHabitReminders(existing.notificationIds, {
@@ -78,48 +86,43 @@ export function useHabits() {
 
     await storageUpdate(updated);
     setHabits((prev) => prev.map((h) => (h.id === input.id ? updated : h)));
-    },
-    [habits],
-  );
+  }, []); 
 
-  const deleteHabit = useCallback(
-    async (id: string): Promise<void> => {
-    const habit = habits.find((h) => h.id === id);
+  const deleteHabit = useCallback(async (id: string): Promise<void> => {
+    const habit = habitsRef.current.find((h) => h.id === id);
     if (habit) {
       await cancelHabitReminders(habit.notificationIds);
     }
     await storageDelete(id);
     setHabits((prev) => prev.filter((h) => h.id !== id));
-    },
-    [habits],
-  );
+  }, []); 
 
   const markDone = useCallback(async (id: string): Promise<void> => {
     const updated = await storageMarkDone(id);
     if (updated) {
       setHabits((prev) => prev.map((h) => (h.id === id ? updated : h)));
     }
-  }, []);
+  }, []); 
 
   const unmarkDone = useCallback(async (id: string): Promise<void> => {
     const updated = await storageUnmarkDone(id);
     if (updated) {
       setHabits((prev) => prev.map((h) => (h.id === id ? updated : h)));
     }
-  }, []);
+  }, []); 
 
-  const toggleDone = useCallback(
-    async (id: string): Promise<void> => {
-    const habit = habits.find((h) => h.id === id);
+  const toggleDone = useCallback(async (id: string): Promise<void> => {
+    const habit = habitsRef.current.find((h) => h.id === id);
     if (!habit) return;
-      if (todayComplete(habit)) {
-        await unmarkDone(id);
-      } else {
-        await markDone(id);
-      }
-    },
-    [habits, markDone, unmarkDone],
-  );
+    
+    if (todayComplete(habit)) {
+      const updated = await storageUnmarkDone(id);
+      if (updated) setHabits((prev) => prev.map((h) => (h.id === id ? updated : h)));
+    } else {
+      const updated = await storageMarkDone(id);
+      if (updated) setHabits((prev) => prev.map((h) => (h.id === id ? updated : h)));
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     const data = await loadHabits();

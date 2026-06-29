@@ -1,175 +1,128 @@
+import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect, useRouter } from "expo-router";
+import { memo, useCallback, useMemo } from "react";
 import {
-  View,
-  Text,
+  ActivityIndicator,
+  Platform,
   ScrollView,
   StyleSheet,
-  ActivityIndicator,
-} from 'react-native';
-import { useFocusEffect } from 'expo-router';
-import { useCallback } from 'react';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+  Text,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useTheme } from '../../components/ThemeContext';
-import { useHabits } from '../../hooks/use-habits';
-import { Habit } from '../../lib/habits/types';
+import { useTheme } from "../../context/ThemeContext";
+import { useHabits } from "../../hooks/use-habits";
+import { Habit } from "../../lib/habits/types";
 
-
+// Configuration for the 15x7 grid (105 days)
 const GRID_COLS = 15;
 const GRID_ROWS = 7;
-const TOTAL_CELLS = GRID_COLS * GRID_ROWS; 
+const TOTAL_CELLS = GRID_COLS * GRID_ROWS;
 
-function getISODate(daysAgo: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - daysAgo);
-  return d.toISOString().slice(0, 10);
+// 1. THE ARCHITECTURE FIX: Pre-generate dates ONCE.
+// Stop creating thousands of Date objects on every render cycle.
+const DATE_MAP = () => {
+  const dates = [];
+  const today = new Date();
+  for (let i = TOTAL_CELLS - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    dates.push(d.toISOString().slice(0, 10));
+  }
+  return dates;
+};
+
+// Compute this exactly once when the module loads
+const PRECOMPUTED_DATES = DATE_MAP();
+
+function formatFreq(h: Habit) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const time = `${pad(h.frequency.hour)}:${pad(h.frequency.minute)}`;
+  if (h.frequency.kind === "daily") return `Daily · ${time}`;
+  const labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  return `${h.frequency.weekdays.map((i) => labels[i]).join(", ")} · ${time}`;
 }
 
-function getCellLevel(habit: Habit, daysAgo: number): 0 | 1 | 2 | 3 {
-  const iso = getISODate(daysAgo);
-  if (habit.lastCompletedISO === iso) return 3;
-  return 0;
-}
+// 2. MEMOIZATION: This component now only redraws if the specific habit's completion state changes.
+const Heatmap = memo(({ habit, colors }: { habit: Habit; colors: any }) => {
+  const s = styles(colors);
 
-
-function Heatmap({ habit, colors }: { habit: Habit; colors: ReturnType<typeof useTheme>['colors'] }) {
-  const cells = Array.from({ length: TOTAL_CELLS }, (_, i) => {
-    const daysAgo = TOTAL_CELLS - 1 - i;
-    const level = getCellLevel(habit, daysAgo);
-    return { key: i, level };
-  });
-
-  const cellBg = (level: 0 | 1 | 2 | 3) => {
-    if (level === 0) return colors.bg3;
-    if (level === 1) return colors.border2;
-    if (level === 2) return colors.text3;
-    return colors.text;
-  };
+  const grid = useMemo(() => {
+    return PRECOMPUTED_DATES.map((dateStr) => ({
+      date: dateStr,
+      isDone: habit.lastCompletedISO === dateStr, 
+    }));
+  }, [habit.lastCompletedISO]);
 
   return (
-    <View>
-      <View style={heatStyles.grid}>
-        {cells.map((c) => (
+    <View style={s.heatmapContainer}>
+      <View style={s.grid}>
+        {grid.map((cell, i) => (
           <View
-            key={c.key}
-            style={[heatStyles.cell, { backgroundColor: cellBg(c.level) }]}
+            key={i}
+            style={[
+              s.cell,
+              { backgroundColor: cell.isDone ? colors.text : colors.bg3 },
+            ]}
           />
         ))}
       </View>
-      <View style={heatStyles.legend}>
-        <Text style={[heatStyles.legendLabel, { color: colors.text3 }]}>LESS</Text>
-        <View style={heatStyles.legendCells}>
-          {([0, 1, 2, 3] as const).map((l) => (
-            <View
-              key={l}
-              style={[heatStyles.legendCell, { backgroundColor: cellBg(l) }]}
-            />
-          ))}
-        </View>
-        <Text style={[heatStyles.legendLabel, { color: colors.text3 }]}>MORE</Text>
-        <Text style={[heatStyles.legendLabel, { color: colors.text3, marginLeft: 'auto' }]}>
-          LONGEST {habit.streak}
-        </Text>
+      <View style={s.legend}>
+        <Text style={s.legendLabel}>Last 105 days</Text>
       </View>
     </View>
   );
-}
+}, (prev, next) => prev.habit.lastCompletedISO === next.habit.lastCompletedISO);
 
-const heatStyles = StyleSheet.create({
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 3,
-    marginBottom: 8,
-  },
-  cell: { width: 16, height: 16, borderRadius: 3 },
-  legend: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  legendLabel: { fontSize: 10, fontWeight: '600' },
-  legendCells: { flexDirection: 'row', gap: 3 },
-  legendCell: { width: 10, height: 10, borderRadius: 2 },
-});
-
-
-function StreakCard({ habit }: { habit: Habit }) {
+const StreakCard = ({ habit }: { habit: Habit }) => {
   const { colors } = useTheme();
-  const s = cardStyles(colors);
+  const s = styles(colors);
 
   return (
     <View style={s.card}>
-      <View style={s.header}>
-        <Text style={s.title}>
-          {habit.emoji} {habit.name}
-        </Text>
-        <View style={s.streakBox}>
+      <View style={s.cardHeader}>
+        <View style={s.titleRow}>
+          <Text style={s.emoji}>{habit.emoji}</Text>
+          <View style={s.titleGroup}>
+            <Text style={s.title}>{habit.name}</Text>
+            <Text style={s.freq}>{formatFreq(habit)}</Text>
+          </View>
+        </View>
+        <View style={s.streakBadge}>
+          <Ionicons name="flame" size={16} color={colors.danger} />
           <Text style={s.streakNum}>{habit.streak}</Text>
-          <Text style={s.streakLabel}>CURRENT</Text>
         </View>
       </View>
       <Heatmap habit={habit} colors={colors} />
     </View>
   );
-}
-
-const cardStyles = (c: ReturnType<typeof useTheme>['colors']) =>
-  StyleSheet.create({
-    card: {
-      marginHorizontal: 20,
-      marginBottom: 16,
-      borderRadius: 12,
-      backgroundColor: c.bg2,
-      borderWidth: 0.5,
-      borderColor: c.border,
-      padding: 16,
-    },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: 12,
-    },
-    title: { fontSize: 16, fontWeight: '700', color: c.text, flex: 1 },
-    streakBox: { alignItems: 'flex-end' },
-    streakNum: { fontSize: 28, fontWeight: '700', color: c.text, lineHeight: 30 },
-    streakLabel: {
-      fontSize: 10, fontWeight: '600', color: c.text3,
-      letterSpacing: 0.5, textTransform: 'uppercase',
-    },
-  });
-
+};
 
 export default function StreaksScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { habits, loading, refresh } = useHabits();
+  const s = styles(colors);
 
   useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
-      <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 }}>
-        <Text style={{ fontSize: 11, fontWeight: '600', letterSpacing: 1, color: colors.text3, textTransform: 'uppercase', marginBottom: 4 }}>
-          HISTORY
-        </Text>
-        <Text style={{ fontSize: 32, fontWeight: '700', color: colors.text }}>Streaks</Text>
+    <View style={[s.container, { paddingTop: insets.top }]}>
+      <View style={s.header}>
+        <Text style={s.eyebrow}>History</Text>
+        <Text style={s.headerTitle}>Streaks</Text>
       </View>
 
-      <View style={{ height: 0.5, backgroundColor: colors.border, marginBottom: 16 }} />
-
       {loading ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator color={colors.text} />
-        </View>
+        <View style={s.center}><ActivityIndicator color={colors.text} /></View>
       ) : habits.length === 0 ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 }}>
-          <Text style={{ fontSize: 48, marginBottom: 12 }}>📊</Text>
-          <Text style={{ fontSize: 17, fontWeight: '600', color: colors.text, marginBottom: 6 }}>
-            No habits tracked
-          </Text>
-          <Text style={{ fontSize: 13, color: colors.text3, textAlign: 'center', lineHeight: 20 }}>
-            Create habits and mark them done to see your streak history here.
-          </Text>
+        <View style={s.center}>
+          <Text style={s.emptyIcon}>📊</Text>
+          <Text style={s.emptyTitle}>No habits tracked</Text>
         </View>
       ) : (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.list}>
           {habits.map((h) => (
             <StreakCard key={h.id} habit={h} />
           ))}
@@ -178,3 +131,32 @@ export default function StreaksScreen() {
     </View>
   );
 }
+
+const styles = (c: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: c.bg },
+  header: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20 },
+  eyebrow: { fontSize: 11, fontWeight: "700", letterSpacing: 1, color: c.text3, textTransform: "uppercase" },
+  headerTitle: { fontSize: 32, fontWeight: "800", color: c.text, letterSpacing: -1 },
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  list: { paddingBottom: 100 },
+  
+  card: { marginHorizontal: 20, marginBottom: 16, borderRadius: 16, backgroundColor: c.bg2, padding: 16, borderWidth: 1, borderColor: c.border2 },
+  cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 },
+  titleRow: { flexDirection: "row", alignItems: "center", flex: 1 },
+  emoji: { fontSize: 32, marginRight: 12 },
+  titleGroup: { flex: 1 },
+  title: { fontSize: 18, fontWeight: "700", color: c.text },
+  freq: { fontSize: 12, fontWeight: "500", color: c.text3, marginTop: 2 },
+  
+  streakBadge: { flexDirection: "row", alignItems: "center", backgroundColor: c.bg3, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, gap: 4 },
+  streakNum: { fontSize: 16, fontWeight: "800", color: c.text },
+  
+  heatmapContainer: { marginTop: 4 },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: 3 },
+  cell: { width: 14, height: 14, borderRadius: 3 },
+  legend: { marginTop: 10, flexDirection: "row", justifyContent: "space-between" },
+  legendLabel: { fontSize: 10, fontWeight: "600", color: c.text3 },
+  
+  emptyIcon: { fontSize: 48, marginBottom: 12 },
+  emptyTitle: { fontSize: 17, fontWeight: "600", color: c.text },
+});

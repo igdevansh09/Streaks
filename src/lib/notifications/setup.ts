@@ -2,7 +2,7 @@ import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 
 export const CHANNEL_ID = "streaks-reminders";
-export const CHANNEL_NAME = "Habit Reminders";
+export const CHANNEL_NAME = "Streaks Reminders";
 
 export async function createAndroidChannel(): Promise<void> {
   if (Platform.OS !== "android") return;
@@ -13,7 +13,6 @@ export async function createAndroidChannel(): Promise<void> {
     vibrationPattern: [0, 250, 250, 250],
     lightColor: "#0a0a0a",
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-    sound: "default",
     enableVibrate: true,
     showBadge: true,
   });

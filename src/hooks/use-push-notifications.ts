@@ -18,37 +18,13 @@ type PushState = {
 
 export function usePushNotifications() {
   const router = useRouter();
-
-  const notificationListener = useRef<Notifications.EventSubscription | null>(
-    null,
-  );
-  const responseListener = useRef<Notifications.EventSubscription | null>(null);
-
+  const handledNotificationId = useRef<string | null>(null);
   const [state, setState] = useState<PushState>({
     token: null,
     tokenError: null,
     registering: false,
     permissionStatus: "undetermined",
   });
-
-  const handleNotificationResponse = (
-    response: Notifications.NotificationResponse,
-  ) => {
-    const data = response.notification.request.content.data as
-      | NotificationData
-      | undefined
-      | null;
-
-    if (!data) return;
-
-    if (
-      data.screen === "/habit" &&
-      typeof data.habitId === "string" &&
-      data.habitId.length > 0
-    ) {
-      router.push(`/habit/${data.habitId}`);
-    }
-  };
 
   useEffect(() => {
     let isMounted = true;
@@ -57,35 +33,51 @@ export function usePushNotifications() {
       if (isMounted) setState((s) => ({ ...s, permissionStatus: status }));
     });
 
-    const response = Notifications.getLastNotificationResponse();
+    const handleNotificationResponse = (
+      response: Notifications.NotificationResponse,
+    ) => {
+      const notificationId = response.notification.request.identifier;
+      
+      if (handledNotificationId.current === notificationId) {
+        return;
+      }
+      handledNotificationId.current = notificationId;
 
-    if (response && isMounted) {
-      setTimeout(() => {
-        if (isMounted) {
-          handleNotificationResponse(response);
-        }
-      }, 0);
-    }
+      const data = response.notification.request.content.data as
+        | NotificationData
+        | undefined
+        | null;
 
-    notificationListener.current =
-      Notifications.addNotificationReceivedListener((_notification) => {});
+      if (!data) return;
 
-    responseListener.current =
+      if (
+        data.screen === "/habit" &&
+        typeof data.habitId === "string" &&
+        data.habitId.length > 0
+      ) {
+        router.push(`/habit/${data.habitId}`);
+      }
+    };
+
+    Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (response && isMounted) {
+        handleNotificationResponse(response);
+      }
+    });
+
+    const responseListener =
       Notifications.addNotificationResponseReceivedListener(
         handleNotificationResponse,
       );
 
     return () => {
       isMounted = false;
-      notificationListener.current?.remove();
-      responseListener.current?.remove();
+      responseListener.remove();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [router]); 
 
   const register = async (): Promise<void> => {
     setState((s) => ({ ...s, registering: true, tokenError: null }));
-
     const result = await registerForPushNotifications();
 
     if (result.success) {
