@@ -1,5 +1,5 @@
 # ⚡ Streaks
-*Build consistency, track your progress.*
+*only local notification is implemented (there is some error in my firebase account as I'm not able to create any other project) but I setup the code for push notifications*
 
 Streaks is a minimalist, high-performance habit tracker designed to help you stay consistent. Built with **React Native** and **Expo**, Streaks focuses on a frictionless experience—no bloat, just the data you need to keep your momentum going.
 
