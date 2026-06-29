@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../context/ThemeContext";
 import { usePushNotifications } from "../../hooks/use-push-notifications";
 import { ThemeMode } from "../../lib/habits/types";
+import { loadHabits } from "../../lib/habits/storage";
 import { cancelAllScheduled, getAllScheduledCount } from "../../lib/notifications/schedule";
 import { getPermissionStatus, PermissionStatus, requestPermission } from "../../lib/notifications/setup";
 
@@ -53,11 +54,20 @@ export default function SettingsScreen() {
 
   const handleFireTest = async () => {
     triggerHaptic();
+    
+    const habits = await loadHabits();
+    const targetHabitId = habits.length > 0 ? habits[0].id : "no-habits-yet";
+
+    if (targetHabitId === "no-habits-yet") {
+      Alert.alert("Create a habit", "You need to create at least one habit first to test the deep linking.");
+      return;
+    }
+
     await Notifications.scheduleNotificationAsync({
       content: {
         title: "🔔 Test notification",
         body: "Deep link tap → habit detail screen.",
-        data: { screen: "/habit", habitId: "test" },
+        data: { screen: "/habit", habitId: targetHabitId },
       },
       trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 3 },
     });
@@ -68,7 +78,7 @@ export default function SettingsScreen() {
   const handleCopyToken = async () => {
     if (token) {
       await Clipboard.setStringAsync(token);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert("Copied", "Push token copied to clipboard.");
     }
   };

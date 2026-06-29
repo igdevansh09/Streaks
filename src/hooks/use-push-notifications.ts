@@ -1,6 +1,6 @@
 import * as Notifications from "expo-notifications";
 import { useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { NotificationData } from "../lib/habits/types";
 import { registerForPushNotifications } from "../lib/notifications/push";
 import {
@@ -16,9 +16,11 @@ type PushState = {
   permissionStatus: PermissionStatus;
 };
 
+let globalHandledNotificationId: string | null = null;
+
 export function usePushNotifications() {
   const router = useRouter();
-  const handledNotificationId = useRef<string | null>(null);
+  
   const [state, setState] = useState<PushState>({
     token: null,
     tokenError: null,
@@ -38,10 +40,11 @@ export function usePushNotifications() {
     ) => {
       const notificationId = response.notification.request.identifier;
       
-      if (handledNotificationId.current === notificationId) {
+      // 2. Check the global memory instead of a useRef
+      if (globalHandledNotificationId === notificationId) {
         return;
       }
-      handledNotificationId.current = notificationId;
+      globalHandledNotificationId = notificationId;
 
       const data = response.notification.request.content.data as
         | NotificationData

@@ -15,13 +15,10 @@ import { useTheme } from "../../context/ThemeContext";
 import { useHabits } from "../../hooks/use-habits";
 import { Habit } from "../../lib/habits/types";
 
-// Configuration for the 15x7 grid (105 days)
 const GRID_COLS = 15;
 const GRID_ROWS = 7;
 const TOTAL_CELLS = GRID_COLS * GRID_ROWS;
 
-// 1. THE ARCHITECTURE FIX: Pre-generate dates ONCE.
-// Stop creating thousands of Date objects on every render cycle.
 const DATE_MAP = () => {
   const dates = [];
   const today = new Date();
@@ -33,7 +30,6 @@ const DATE_MAP = () => {
   return dates;
 };
 
-// Compute this exactly once when the module loads
 const PRECOMPUTED_DATES = DATE_MAP();
 
 function formatFreq(h: Habit) {
@@ -44,7 +40,6 @@ function formatFreq(h: Habit) {
   return `${h.frequency.weekdays.map((i) => labels[i]).join(", ")} · ${time}`;
 }
 
-// 2. MEMOIZATION: This component now only redraws if the specific habit's completion state changes.
 const Heatmap = memo(({ habit, colors }: { habit: Habit; colors: any }) => {
   const s = styles(colors);
 
